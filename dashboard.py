@@ -39,10 +39,10 @@ def show_dashboard():
         title="ATS Score Comparison"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.divider()
 
     st.subheader("📋 Resume History")
 
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")

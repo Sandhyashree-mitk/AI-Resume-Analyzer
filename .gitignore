@@ -1,4 +1,11 @@
-.env
 venv/
 __pycache__/
 *.pyc
+
+Resume_Report.pdf
+history.csv
+
+.env
+*.key
+*.pem
+secrets.toml

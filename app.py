@@ -37,7 +37,6 @@ from resume_rewriter import (
 )
 
 
-
 # =====================================================
 # PAGE CONFIGURATION
 # =====================================================
@@ -47,6 +46,22 @@ st.set_page_config(
     page_icon="📄",
     layout="wide"
 )
+
+
+# =====================================================
+# SESSION STATE
+# =====================================================
+
+if "resume_data" not in st.session_state:
+    st.session_state["resume_data"] = None
+
+if "job_analysis" not in st.session_state:
+    st.session_state["job_analysis"] = ""
+
+if "job_match_result" not in st.session_state:
+    st.session_state["job_match_result"] = None
+
+
 # =====================================================
 # SIDEBAR
 # =====================================================
@@ -58,13 +73,16 @@ with st.sidebar:
     st.write("### 🧭 Navigation")
 
     page = st.radio(
-    "Go to",
-    [
-        "🏠 Home",
-        "📊 Dashboard",
-        "🤖 AI Resume Assistant"
-    ]
-)
+        "Go to",
+        [
+            "🏠 Home",
+            "📊 Dashboard",
+            "🤖 AI Resume Assistant"
+        ],
+        key="navigation"
+    )
+
+    st.divider()
 
     st.info(
         "Upload your resume and analyze your "
@@ -89,73 +107,23 @@ with st.sidebar:
         "Built with Python & Streamlit"
     )
 
-st.write("Upload your Resume in PDF format.")
-
-uploaded_file = st.file_uploader(
-    "Choose Resume",
-    type=["pdf"]
-)
-
-# Default values
-name = ""
-email = ""
-phone = ""
-linkedin = ""
-github = ""
-skills = []
-education = []
-certifications = []
-score = 0
-suggestions = []
-text = ""
-missing = []
-
-if "job_analysis" not in st.session_state:
-    st.session_state["job_analysis"] = ""
-
 
 # =====================================================
-# START AFTER UPLOAD
+# HELPER FUNCTION
 # =====================================================
 
-if uploaded_file is not None:
-
-    st.success("✅ Resume Uploaded Successfully!")
+def process_resume(uploaded_file):
 
     text = ""
 
-try:
-
     with pdfplumber.open(uploaded_file) as pdf:
 
-        for page in pdf.pages:
+        for pdf_page in pdf.pages:
 
-            page_text = page.extract_text()
+            page_text = pdf_page.extract_text()
 
             if page_text:
                 text += page_text + "\n"
-
-except Exception as e:
-
-    st.error("❌ Unable to read this PDF.")
-    st.warning(f"Please upload a valid PDF resume.")
-
-    st.stop()
-    # =====================================================
-    # Resume Text
-    # =====================================================
-
-    st.subheader("📄 Extracted Resume")
-
-    st.text_area(
-        "Resume Text",
-        text,
-        height=300
-    )
-
-    # =====================================================
-    # Extract Resume Details
-    # =====================================================
 
     name = extract_name(text)
     email = extract_email(text)
@@ -166,51 +134,6 @@ except Exception as e:
     skills = extract_skills(text)
     education = extract_education(text)
     certifications = extract_certifications(text)
-
-    left, right = st.columns(2)
-
-    with left:
-
-        st.subheader("👤 Candidate Information")
-
-        st.info(
-            f"""
-**Name:** {name}
-
-**Email:** {email}
-
-**Phone:** {phone}
-
-**LinkedIn:** {linkedin}
-
-**GitHub:** {github}
-"""
-        )
-
-    with right:
-
-        st.subheader("🛠 Skills")
-
-        if skills:
-            for skill in skills:
-                st.write("✅", skill)
-        else:
-            st.write("No Skills Found")
-
-        st.subheader("🎓 Education")
-
-        for edu in education:
-            st.write("🎓", edu)
-
-        st.subheader("📜 Certifications")
-
-        for cert in certifications:
-            st.write("🏅", cert)
-
-
-    # =====================================================
-    # ATS SCORE
-    # =====================================================
 
     score = calculate_ats_score(
         name,
@@ -224,86 +147,6 @@ except Exception as e:
         text
     )
 
-    # Save Resume History
-    save_history(
-        name,
-        email,
-        score,
-        skills,
-        certifications
-    )
-
-    st.divider()
-
-    st.subheader("📊 Resume Performance")
-
-    c1, c2, c3 = st.columns(3)
-
-    # ATS Gauge
-    with c1:
-
-        gauge = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
-                value=score,
-                title={"text": "ATS Score"},
-                gauge={
-                    "axis": {"range": [0, 100]},
-                    "bar": {"color": "darkblue"},
-                    "steps": [
-                        {"range": [0, 40], "color": "#ff4d4d"},
-                        {"range": [40, 70], "color": "#ffd633"},
-                        {"range": [70, 100], "color": "#66cc66"},
-                    ],
-                },
-            )
-        )
-
-        gauge.update_layout(height=300)
-
-        st.plotly_chart(
-            gauge,
-            width="stretch"
-        )
-
-    # Skills Count
-    with c2:
-        st.metric(
-            "🛠 Skills",
-            len(skills)
-        )
-
-    # Certificate Count
-    with c3:
-
-        if certifications == ["Not Found"]:
-            cert_count = 0
-        else:
-            cert_count = len(certifications)
-
-        st.metric(
-            "📜 Certificates",
-            cert_count
-        )
-
-    st.progress(score / 100)
-
-    if score >= 90:
-        st.success("⭐⭐⭐⭐⭐ Excellent Resume!")
-
-    elif score >= 75:
-        st.success("👍 Good Resume!")
-
-    elif score >= 60:
-        st.warning("⚠ Average Resume. Improve a few sections.")
-
-    else:
-        st.error("❌ Resume Needs Improvement.")
-
-    # =====================================================
-    # Resume Suggestions
-    # =====================================================
-
     suggestions = get_resume_suggestions(
         email,
         phone,
@@ -315,156 +158,608 @@ except Exception as e:
         text
     )
 
-    st.divider()
-
-    st.subheader("💡 Resume Suggestions")
-
-    if suggestions:
-
-        for suggestion in suggestions:
-            st.success(suggestion)
-
-    else:
-
-        st.success("🎉 Excellent! Your resume looks well structured.")
-
-    # =====================================================
-    # Resume Section Analysis
-    # =====================================================
-
-    st.divider()
-
-    st.subheader("📋 Resume Section Analysis")
-
     sections = analyze_sections(text)
 
-    for section, status in sections.items():
+    return {
+        "text": text,
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "linkedin": linkedin,
+        "github": github,
+        "skills": skills,
+        "education": education,
+        "certifications": certifications,
+        "score": score,
+        "suggestions": suggestions,
+        "sections": sections
+    }
 
-        if "Complete" in status or "Present" in status:
-            st.success(f"{section}: {status}")
 
-        else:
-            st.error(f"{section}: {status}")
+# =====================================================
+# 🏠 HOME PAGE
+# =====================================================
 
+if page == "🏠 Home":
 
-        # =====================================================
-    # JOB DESCRIPTION MATCHING
-    # =====================================================
+    st.title("📄 AI Resume Analyzer")
 
-    st.divider()
-
-    st.header("🎯 Job Description Matching")
-
-    job_description = st.text_area(
-        "Paste the Job Description",
-        height=250,
-        placeholder="Paste any job description here..."
+    st.write(
+        "Upload your Resume in PDF format to analyze "
+        "its ATS score, skills and structure."
     )
 
-    if st.button("Analyze Job Match"):
+    uploaded_file = st.file_uploader(
+        "Choose Resume",
+        type=["pdf"],
+        key="home_resume_upload"
+    )
 
-        if job_description.strip() == "":
-            st.warning("Please paste a Job Description.")
+    if uploaded_file is not None:
 
-        else:
+        st.success("✅ Resume Uploaded Successfully!")
 
-            # Match Resume
-            match_score, matched, missing = match_resume(
-                skills,
-                job_description
+        # ---------------------------------------------
+        # PROCESS RESUME
+        # ---------------------------------------------
+
+        try:
+
+            resume_data = process_resume(uploaded_file)
+
+            st.session_state["resume_data"] = resume_data
+
+        except Exception as e:
+
+            st.error(
+                "❌ Unable to process the resume."
             )
 
-            st.subheader("🤖 AI Skill Improvement Recommendations")
+            st.exception(e)
 
-            if missing:
+    resume_data = st.session_state.get("resume_data")
 
-                with st.spinner("🤖 AI is analyzing your missing skills..."):
+    if resume_data is not None:
 
-                    ai_recommendations = recommend_skill_improvements(
-                        missing,
-                        job_description
-                    )
+        text = resume_data["text"]
+        name = resume_data["name"]
+        email = resume_data["email"]
+        phone = resume_data["phone"]
+        linkedin = resume_data["linkedin"]
+        github = resume_data["github"]
+        skills = resume_data["skills"]
+        education = resume_data["education"]
+        certifications = resume_data["certifications"]
+        score = resume_data["score"]
+        suggestions = resume_data["suggestions"]
+        sections = resume_data["sections"]
 
-                st.success("✨ AI analysis completed!")
+        # ---------------------------------------------
+        # SAVE HISTORY
+        # ---------------------------------------------
 
-                st.write(ai_recommendations)
+        if (
+            "last_saved_resume" not in st.session_state
+            or st.session_state["last_saved_resume"] != text
+        ):
+
+            try:
+
+                save_history(
+                    name,
+                    email,
+                    score,
+                    skills,
+                    certifications
+                )
+
+                st.session_state["last_saved_resume"] = text
+
+            except Exception:
+                pass
+
+        # ---------------------------------------------
+        # EXTRACTED RESUME
+        # ---------------------------------------------
+
+        st.divider()
+
+        st.subheader("📄 Extracted Resume")
+
+        st.text_area(
+            "Resume Text",
+            text,
+            height=300,
+            key="home_resume_text"
+        )
+
+        # ---------------------------------------------
+        # CANDIDATE INFORMATION
+        # ---------------------------------------------
+
+        st.divider()
+
+        left, right = st.columns(2)
+
+        with left:
+
+            st.subheader("👤 Candidate Information")
+
+            st.info(
+                f"""
+**Name:** {name}
+
+**Email:** {email}
+
+**Phone:** {phone}
+
+**LinkedIn:** {linkedin}
+
+**GitHub:** {github}
+"""
+            )
+
+        with right:
+
+            st.subheader("🛠 Skills")
+
+            if skills:
+
+                for skill in skills:
+                    st.write("✅", skill)
 
             else:
 
-               st.success(
-                "🎉 Excellent! No major missing skills were detected."
-               )
+                st.info("No skills found.")
+
+            st.subheader("🎓 Education")
+
+            if education:
+
+                for edu in education:
+                    st.write("🎓", edu)
+
+            else:
+
+                st.info("No education found.")
+
+            st.subheader("📜 Certifications")
+
+            if certifications:
+
+                for cert in certifications:
+                    st.write("🏅", cert)
+
+            else:
+
+                st.info("No certifications found.")
+
+        # ---------------------------------------------
+        # ATS SCORE
+        # ---------------------------------------------
+
+        st.divider()
+
+        st.subheader("📊 Resume Performance")
+
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+
+            gauge = go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=score,
+                    title={"text": "ATS Score"},
+                    gauge={
+                        "axis": {"range": [0, 100]},
+                        "bar": {"color": "darkblue"},
+                        "steps": [
+                            {
+                                "range": [0, 40],
+                                "color": "#ff4d4d"
+                            },
+                            {
+                                "range": [40, 70],
+                                "color": "#ffd633"
+                            },
+                            {
+                                "range": [70, 100],
+                                "color": "#66cc66"
+                            }
+                        ]
+                    }
+                )
+            )
+
+            gauge.update_layout(height=300)
+
+            st.plotly_chart(
+                gauge,
+                width="stretch",
+                key="ats_gauge"
+            )
+
+        with c2:
+
+            st.metric(
+                "🛠 Skills",
+                len(skills)
+            )
+
+        with c3:
+
+            if certifications == ["Not Found"]:
+                cert_count = 0
+            else:
+                cert_count = len(certifications)
+
+            st.metric(
+                "📜 Certificates",
+                cert_count
+            )
+
+        st.progress(score / 100)
+
+        if score >= 90:
+
+            st.success(
+                "⭐⭐⭐⭐⭐ Excellent Resume!"
+            )
+
+        elif score >= 75:
+
+            st.success(
+                "👍 Good Resume!"
+            )
+
+        elif score >= 60:
+
+            st.warning(
+                "⚠️ Average Resume. "
+                "Improve a few sections."
+            )
+
+        else:
+
+            st.error(
+                "❌ Resume Needs Improvement."
+            )
+
+        # ---------------------------------------------
+        # RESUME SUGGESTIONS
+        # ---------------------------------------------
+
+        st.divider()
+
+        st.subheader("💡 Resume Suggestions")
+
+        if suggestions:
+
+            for suggestion in suggestions:
+
+                st.success(suggestion)
+
+        else:
+
+            st.success(
+                "🎉 Excellent! Your resume "
+                "looks well structured."
+            )
+
+        # ---------------------------------------------
+        # SECTION ANALYSIS
+        # ---------------------------------------------
+
+        st.divider()
+
+        st.subheader(
+            "📋 Resume Section Analysis"
+        )
+
+        for section, status in sections.items():
+
+            if (
+                "Complete" in status
+                or "Present" in status
+            ):
+
+                st.success(
+                    f"{section}: {status}"
+                )
+
+            else:
+
+                st.error(
+                    f"{section}: {status}"
+                )
+
+        # ---------------------------------------------
+        # PDF REPORT
+        # ---------------------------------------------
+
+        st.divider()
+
+        st.subheader(
+            "📄 Download Resume Report"
+        )
+
+        try:
+
+            generate_report(
+                "Resume_Report.pdf",
+                name,
+                email,
+                phone,
+                linkedin,
+                github,
+                skills,
+                education,
+                certifications,
+                score,
+                suggestions,
+                st.session_state.get(
+                    "job_analysis",
+                    ""
+                )
+            )
+
+            with open(
+                "Resume_Report.pdf",
+                "rb"
+            ) as pdf_file:
+
+                st.download_button(
+                    label="📥 Download PDF Report",
+                    data=pdf_file,
+                    file_name="Resume_Report.pdf",
+                    mime="application/pdf",
+                    width="stretch",
+                    key="download_pdf_report"
+                )
+
+        except Exception as e:
+
+            st.error(
+                f"Unable to generate PDF report.\n\n{e}"
+            )
+
+    else:
+
+        st.info(
+            "👆 Upload a PDF resume to begin analysis."
+        )
 
 
-            st.subheader("📊 Resume Match Score")
+# =====================================================
+# 📊 DASHBOARD PAGE
+# =====================================================
+
+elif page == "📊 Dashboard":
+
+    try:
+
+        show_dashboard()
+
+    except Exception as e:
+
+        st.error(
+            "❌ Dashboard could not be loaded."
+        )
+
+        st.exception(e)
+
+
+# =====================================================
+# 🤖 AI RESUME ASSISTANT
+# =====================================================
+
+elif page == "🤖 AI Resume Assistant":
+
+    st.title("🤖 AI Resume Assistant")
+
+    st.write(
+        "Improve your resume content and compare "
+        "your resume with a job description."
+    )
+
+    resume_data = st.session_state.get(
+        "resume_data"
+    )
+
+    # =================================================
+    # JOB DESCRIPTION MATCHING
+    # =================================================
+
+    st.divider()
+
+    st.header(
+        "🎯 Resume vs Job Description"
+    )
+
+    if resume_data is None:
+
+        st.warning(
+            "⚠️ Please go to Home and upload "
+            "your resume first."
+        )
+
+    else:
+
+        text = resume_data["text"]
+        skills = resume_data["skills"]
+
+        job_description = st.text_area(
+            "Paste the Job Description",
+            height=250,
+            placeholder=(
+                "Paste any job description here..."
+            ),
+            key="job_description_input"
+        )
+
+        if st.button(
+            "Analyze Job Match",
+            key="analyze_job_match_button",
+            width="stretch"
+        ):
+
+            if job_description.strip() == "":
+
+                st.warning(
+                    "Please paste a Job Description."
+                )
+
+            else:
+
+                try:
+
+                    match_score, matched, missing = (
+                        match_resume(
+                            skills,
+                            job_description
+                        )
+                    )
+
+                    st.session_state[
+                        "job_match_result"
+                    ] = {
+                        "score": match_score,
+                        "matched": matched,
+                        "missing": missing,
+                        "job_description":
+                            job_description
+                    }
+
+                except Exception as e:
+
+                    st.error(
+                        "❌ Unable to analyze job match."
+                    )
+
+                    st.exception(e)
+
+        # ---------------------------------------------
+        # DISPLAY MATCH RESULT
+        # ---------------------------------------------
+
+        job_match = st.session_state.get(
+            "job_match_result"
+        )
+
+        if job_match is not None:
+
+            match_score = job_match["score"]
+            matched = job_match["matched"]
+            missing = job_match["missing"]
+
+            st.subheader(
+                "📊 Resume Match Score"
+            )
 
             st.metric(
                 "Match Percentage",
                 f"{match_score}%"
             )
 
-            st.progress(match_score / 100)
+            st.progress(
+                match_score / 100
+            )
 
             if match_score >= 80:
-                st.success("✅ Excellent Match")
+
+                st.success(
+                    "✅ Excellent Match"
+                )
 
             elif match_score >= 60:
-                st.warning("👍 Good Match")
+
+                st.warning(
+                    "👍 Good Match"
+                )
 
             else:
-                st.error("❌ Low Match")
 
-            # =====================================================
-            # Pie Chart
-            # =====================================================
+                st.error(
+                    "❌ Low Match"
+                )
+
+            # -----------------------------------------
+            # PIE CHART
+            # -----------------------------------------
 
             fig = px.pie(
-                names=["Matched Skills", "Missing Skills"],
-                values=[len(matched), len(missing)],
+                names=[
+                    "Matched Skills",
+                    "Missing Skills"
+                ],
+                values=[
+                    len(matched),
+                    len(missing)
+                ],
                 title="Skill Match Analysis",
                 hole=0.45
             )
 
             st.plotly_chart(
                 fig,
-                width="stretch"
+                width="stretch",
+                key="job_match_pie"
             )
 
-            # =====================================================
-            # Matching and Missing Skills
-            # =====================================================
+            # -----------------------------------------
+            # MATCHED / MISSING
+            # -----------------------------------------
 
             col1, col2 = st.columns(2)
 
             with col1:
 
-                st.subheader("✅ Matching Skills")
+                st.subheader(
+                    "✅ Matching Skills"
+                )
 
                 if matched:
+
                     for skill in matched:
                         st.success(skill)
+
                 else:
-                    st.info("No matching skills found.")
+
+                    st.info(
+                        "No matching skills found."
+                    )
 
             with col2:
 
-                st.subheader("❌ Missing Skills")
+                st.subheader(
+                    "❌ Missing Skills"
+                )
 
                 if missing:
+
                     for skill in missing:
                         st.error(skill)
-                else:
-                    st.success("No missing skills detected!")
 
-            # =====================================================
-            # Course Recommendation
-            # =====================================================
+                else:
+
+                    st.success(
+                        "No missing skills detected!"
+                    )
+
+            # -----------------------------------------
+            # COURSE RECOMMENDATIONS
+            # -----------------------------------------
 
             st.divider()
 
-            st.subheader("📚 Recommended Courses")
+            st.subheader(
+                "📚 Recommended Courses"
+            )
 
-            recommendations = recommend_courses(missing)
+            recommendations = (
+                recommend_courses(missing)
+            )
 
             if recommendations:
 
@@ -475,288 +770,290 @@ except Exception as e:
                         f"📖 Course: {course['Course']}\n\n"
                         f"🏫 Platform: {course['Platform']}"
                     )
+
             else:
 
-                st.info("No course recommendations available.")
+                st.info(
+                    "No course recommendations available."
+                )
 
-if uploaded_file is not None:
+            # -----------------------------------------
+            # AI SKILL IMPROVEMENTS
+            # -----------------------------------------
 
-# =====================================================
-# 🤖 AI SKILL IMPROVEMENT RECOMMENDATIONS
-# =====================================================
+            st.divider()
 
- st.divider() 
-
- st.subheader("🤖 AI Skill Improvement Recommendations")
-
-
-# =====================================================
-# 🎯 AI RESUME VS JOB ANALYSIS
-# =====================================================
-
-st.divider()
-
-st.subheader("🎯 AI Resume vs Job Analysis")
-
-if st.button("🤖 Analyze My Resume for This Job"):
-
-    try:
-
-        with st.spinner(
-            "🤖 AI is comparing your resume with the job description..."
-        ):
-
-            job_analysis = analyze_resume_for_job(
-                text,
-                job_description,
-                missing
+            st.subheader(
+                "🤖 AI Skill Improvement Recommendations"
             )
 
-        st.session_state["job_analysis"] = job_analysis
+            if missing:
 
-        st.success("✨ AI job analysis completed!")
+                if st.button(
+                    "✨ Generate AI Skill Recommendations",
+                    key="ai_skill_recommendation_button",
+                    width="stretch"
+                ):
 
-        st.text_area(
-            "AI Recommendations",
-            job_analysis,
-            height=350
-        )
+                    try:
 
-        st.download_button(
-            label="📥 Download AI Job Analysis",
-            data=job_analysis,
-            file_name="AI_Job_Analysis.txt",
-            mime="text/plain"
-        )
+                        with st.spinner(
+                            "🤖 AI is analyzing your missing skills..."
+                        ):
 
-    except Exception as e:
+                            ai_recommendations = (
+                                recommend_skill_improvements(
+                                    missing,
+                                    job_description
+                                )
+                            )
 
-        st.error("❌ Unable to generate AI job analysis.")
+                        st.success(
+                            "✨ AI analysis completed!"
+                        )
 
-        st.info(
-            "Please try again. Make sure your AI service is configured correctly."
-        )
+                        st.write(
+                            ai_recommendations
+                        )
 
-        st.session_state["job_analysis"] = ""
+                    except Exception as e:
 
+                        st.error(
+                            "❌ Unable to generate AI recommendations."
+                        )
 
-# =====================================================
-# 📄 PDF REPORT DOWNLOAD
-# =====================================================
+                        st.exception(e)
 
-if uploaded_file is not None:
+            else:
+
+                st.success(
+                    "🎉 Excellent! No major missing "
+                    "skills were detected."
+                )
+
+            # -----------------------------------------
+            # AI RESUME VS JOB ANALYSIS
+            # -----------------------------------------
+
+            st.divider()
+
+            st.subheader(
+                "🎯 AI Resume vs Job Analysis"
+            )
+
+            if st.button(
+                "🤖 Analyze My Resume for This Job",
+                key="ai_job_analysis_button",
+                width="stretch"
+            ):
+
+                try:
+
+                    with st.spinner(
+                        "🤖 AI is comparing your resume "
+                        "with the job description..."
+                    ):
+
+                        job_analysis = (
+                            analyze_resume_for_job(
+                                text,
+                                job_description,
+                                missing
+                            )
+                        )
+
+                    st.session_state[
+                        "job_analysis"
+                    ] = job_analysis
+
+                    st.success(
+                        "✨ AI job analysis completed!"
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        "❌ Unable to generate AI job analysis."
+                    )
+
+                    st.info(
+                        "Please make sure your AI "
+                        "service is configured correctly."
+                    )
+
+                    st.session_state[
+                        "job_analysis"
+                    ] = ""
+
+            if st.session_state.get(
+                "job_analysis"
+            ):
+
+                st.text_area(
+                    "AI Recommendations",
+                    st.session_state[
+                        "job_analysis"
+                    ],
+                    height=350,
+                    key="ai_recommendations_output"
+                )
+
+                st.download_button(
+                    label="📥 Download AI Job Analysis",
+                    data=st.session_state[
+                        "job_analysis"
+                    ],
+                    file_name="AI_Job_Analysis.txt",
+                    mime="text/plain",
+                    width="stretch",
+                    key="download_ai_analysis"
+                )
+
+    # =================================================
+    # RESUME REWRITER
+    # =================================================
 
     st.divider()
 
-    st.subheader("📄 Download Resume Report")
+    st.header(
+        "✍️ AI Resume Content Rewriter"
+    )
 
-    try:
+    st.write(
+        "Improve your resume content using AI."
+    )
 
-        generate_report(
-            "Resume_Report.pdf",
-            name,
-            email,
-            phone,
-            linkedin,
-            github,
-            skills,
-            education,
-            certifications,
-            score,
-            suggestions,
-            st.session_state.get("job_analysis", "")
+    rewrite_option = st.selectbox(
+        "🎯 What do you want to improve?",
+        [
+            "Professional Summary",
+            "Project Description",
+            "Work Experience",
+            "ATS-Friendly Bullet Points"
+        ],
+        key="rewrite_option"
+    )
+
+    if rewrite_option == "Professional Summary":
+
+        st.info(
+            "💡 Enter your current professional summary. "
+            "AI will make it clearer, professional and ATS-friendly."
         )
 
-        with open("Resume_Report.pdf", "rb") as pdf_file:
+    elif rewrite_option == "Project Description":
 
-            st.download_button(
-                label="📥 Download PDF Report",
-                data=pdf_file,
-                file_name="Resume_Report.pdf",
-                mime="application/pdf"
-            )
-
-    except Exception as e:
-
-        st.error(
-            f"Unable to generate PDF report.\n\n{e}"
+        st.info(
+            "💡 Enter your project description. "
+            "AI will convert it into strong resume bullet points."
         )
 
+    elif rewrite_option == "Work Experience":
 
-
-# =====================================================
-# DASHBOARD
-# =====================================================
-
-st.divider()
-
-try:
-
-    show_dashboard()
-
-except Exception as e:
-
-    st.warning(
-        "Dashboard is unavailable.\n"
-        "Check dashboard.py.\n\n"
-        f"Error: {e}"
-    )
-
-
-# =====================================================
-# END OF RESUME UPLOAD BLOCK
-# =====================================================
-
-else:
-
-    st.info("👆 Upload a PDF resume to begin analysis.")
-# =====================================================
-# 🤖 AI RESUME ASSISTANT
-# =====================================================
-
-st.divider()
-
-st.header("🤖 AI Resume Assistant")
-
-st.write(
-    "Improve your resume content using AI. "
-    "Choose a section, enter your content, and let AI rewrite it "
-    "in a professional and ATS-friendly way."
-)
-
-# -----------------------------------------------------
-# Feature Selection
-# -----------------------------------------------------
-
-rewrite_option = st.selectbox(
-    "🎯 What do you want to improve?",
-    [
-        "Professional Summary",
-        "Project Description",
-        "Work Experience",
-        "ATS-Friendly Bullet Points"
-    ]
-)
-
-# -----------------------------------------------------
-# Helpful Description
-# -----------------------------------------------------
-
-if rewrite_option == "Professional Summary":
-
-    st.info(
-        "💡 Enter your current professional summary. "
-        "AI will make it clearer, professional, and ATS-friendly."
-    )
-
-elif rewrite_option == "Project Description":
-
-    st.info(
-        "💡 Enter your project description. "
-        "AI will convert it into strong resume bullet points."
-    )
-
-elif rewrite_option == "Work Experience":
-
-    st.info(
-        "💡 Enter your work experience. "
-        "AI will rewrite it using professional resume language."
-    )
-
-else:
-
-    st.info(
-        "💡 Enter your resume content. "
-        "AI will convert it into ATS-friendly bullet points."
-    )
-
-# -----------------------------------------------------
-# User Input
-# -----------------------------------------------------
-
-resume_content = st.text_area(
-    "📝 Enter your content",
-    height=200,
-    placeholder=(
-        "Example:\n"
-        "Built a Python project for data analysis..."
-    )
-)
-
-# -----------------------------------------------------
-# AI Button
-# -----------------------------------------------------
-
-if st.button(
-    "✨ Improve with AI",
-    width="stretch"
-):
-
-    if resume_content.strip() == "":
-
-        st.warning(
-            "⚠️ Please enter some resume content first."
+        st.info(
+            "💡 Enter your work experience. "
+            "AI will rewrite it using professional resume language."
         )
 
     else:
 
-        with st.spinner(
-            "🤖 AI is improving your content..."
-        ):
-
-            if rewrite_option == "Professional Summary":
-
-                result = improve_summary(
-                    resume_content
-                )
-
-            elif rewrite_option == "Project Description":
-
-                result = improve_project(
-                    resume_content
-                )
-
-            elif rewrite_option == "Work Experience":
-
-                result = improve_experience(
-                    resume_content
-                )
-
-            else:
-
-                result = generate_bullets(
-                    resume_content
-                )
-
-        # -------------------------------------------------
-        # AI RESULT
-        # -------------------------------------------------
-
-        st.success(
-            "✨ Your content has been improved!"
+        st.info(
+            "💡 Enter your resume content. "
+            "AI will convert it into ATS-friendly bullet points."
         )
 
-        st.subheader(
-            "✨ AI-Generated Content"
-        )
+    resume_content = st.text_area(
+        "📝 Enter your content",
+        height=200,
+        placeholder=(
+            "Example:\n"
+            "Built a Python project for data analysis..."
+        ),
+        key="resume_rewriter_input"
+    )
 
-        st.text_area(
-            "Improved Result",
-            result,
-            height=250
-        )
+    if st.button(
+        "✨ Improve with AI",
+        width="stretch",
+        key="improve_resume_button"
+    ):
 
-        # -------------------------------------------------
-        # DOWNLOAD
-        # -------------------------------------------------
+        if resume_content.strip() == "":
 
-        st.download_button(
-            label="📥 Download Improved Content",
-            data=result,
-            file_name="Improved_Resume_Content.txt",
-            mime="text/plain",
-            width="stretch"
-        )
+            st.warning(
+                "⚠️ Please enter some resume content first."
+            )
+
+        else:
+
+            try:
+
+                with st.spinner(
+                    "🤖 AI is improving your content..."
+                ):
+
+                    if rewrite_option == (
+                        "Professional Summary"
+                    ):
+
+                        result = improve_summary(
+                            resume_content
+                        )
+
+                    elif rewrite_option == (
+                        "Project Description"
+                    ):
+
+                        result = improve_project(
+                            resume_content
+                        )
+
+                    elif rewrite_option == (
+                        "Work Experience"
+                    ):
+
+                        result = improve_experience(
+                            resume_content
+                        )
+
+                    else:
+
+                        result = generate_bullets(
+                            resume_content
+                        )
+
+                st.success(
+                    "✨ Your content has been improved!"
+                )
+
+                st.subheader(
+                    "✨ AI-Generated Content"
+                )
+
+                st.text_area(
+                    "Improved Result",
+                    result,
+                    height=250,
+                    key="improved_result"
+                )
+
+                st.download_button(
+                    label="📥 Download Improved Content",
+                    data=result,
+                    file_name="Improved_Resume_Content.txt",
+                    mime="text/plain",
+                    width="stretch",
+                    key="download_improved_content"
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "❌ Unable to improve resume content."
+                )
+
+                st.exception(e)
+
 
 # =====================================================
 # FOOTER
@@ -765,10 +1062,6 @@ if st.button(
 st.divider()
 
 st.caption(
-    "🚀 Developed using Python • Streamlit • PDFPlumber • "
-    "Plotly • Scikit-Learn"
+    "🚀 Developed using Python • Streamlit • "
+    "PDFPlumber • Plotly • Scikit-Learn"
 )
-
-if uploaded_file is None:
-
-    st.info("👆 Upload a PDF resume to begin analysis.")
