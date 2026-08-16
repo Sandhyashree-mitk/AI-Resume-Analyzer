@@ -26,6 +26,20 @@ https://sandhyashree-mitk-ai-resume-analyzer-app-4hmwth.streamlit.app
 - 📄 Generate downloadable PDF Resume Reports
 - 📊 Resume Analytics Dashboard
 
+- ## 📸 Application Screenshots
+
+### 🏠 Home — Resume Analysis
+
+![Home](screenshots/home.png)
+
+### 📊 Resume Dashboard
+
+![Dashboard](screenshots/dashboard.png)
+
+### 🤖 AI Resume Assistant
+
+![AI Resume Assistant](screenshots/ai-analysis.png)
+
 ## 🛠️ Technologies Used
 
 ### Programming Language
